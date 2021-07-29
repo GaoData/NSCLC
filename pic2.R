@@ -4,11 +4,7 @@ library(randomForest)
 
 compare.groups <- list("I_III.IV" = c("I_III","IV"),"CON.IV"= c("Normal","IV"),"CON.I_III"=c("Normal","I_III"),"CON.NSCLC"=c("Normal","NSCLC"));
 names <- c("I_III.IV","CON.IV","CON.I_III")
-#args=commandArgs(T)
-#print (args[1])
-#print (args[2])
-#print(args[3])
-#print(args[4])
+#siamcat function
 siamcat.cross <- function(x,y) {
   siamcat(feat = x, meta = y,
           label='Transfer', case=compare.groups[[d]][2]   # change The compare groups;
@@ -29,9 +25,33 @@ siamcat.cross <- function(x,y) {
     ) %>%
     make.predictions(normalize.holdout = F) %>% evaluate.predictions()
 }
-
-setwd("/mnt/raid5/nagao/Data/Xiehe/qiime2/New_202103/siamcat_result/")
-pheno <- read.csv("/mnt/raid5/nagao/Data/Xiehe/qiime2/Mix/sample-metadata.tsv", sep="\t",row.names=1, header=T)
+siamcat.deg <- function(x,y) {
+  siamcat(feat = x, meta = y,
+          label='Transfer', case=compare.groups[[d]][2]   # change The compare groups;
+  ) %>% 
+    filter.features( filter.method = 'abundance',
+                     cutoff = 0.001,
+                     rm.unmapped = TRUE,
+                     verbose=2
+    ) %>%  
+    normalize.features(norm.method = "log.std",
+                       norm.param = list(log.n0 = 1e-05, sd.min.q = 0.1),
+                       verbose = 2
+    ) %>%
+    check.associations(
+      sort.by = 'fc',
+      alpha = 0.1,
+      mult.corr = "fdr",
+      detect.lim = 10 ^-6,
+      plot.type = "box",
+      panels = c("fc", "prevalence", "auroc"),
+      max.show = 20,
+      feature.type = "normalized"
+    )
+}
+###
+# machine learning
+pheno <- read.csv("sample-metadata.tsv", sep="\t",row.names=1, header=T)
 
 f.dat <- asv_genus.relative %>% dplyr::select( paste0(rownames(pheno),"_F")) 
 rownames(f.dat) <- paste0("F:", rownames(f.dat))
@@ -170,7 +190,7 @@ siamcat.rfe.train <- list()
 siamcat.rfe.test <- list()
 caret.list <- list()
 set.seed(1234)
-#for (d in names){
+for (d in names){
   all.meta.data <- subset( pheno, Transfer %in% compare.groups[[d]])
   f.feat.all <- f.dat[, rownames(all.meta.data)] %>% as.data.frame()
   s.feat.all <- s.dat[, rownames(all.meta.data)] %>% as.data.frame()
@@ -203,8 +223,7 @@ set.seed(1234)
   rfe.feat <- subset(feat.all, rownames(feat.all) %in% genus)
   train.feat <- rfe.feat[,rownames(meta.data)]
   siamcat.rfe.train[[i]] <- siamcat.cross(x=train.feat, y=meta.data)
-  
-  #test.meta <-  all.meta.data[-training.samples,]
+ 
   test.feat <-  rfe.feat[,rownames(test.meta)]
   
   siamcat.rfe.test[[i]] <- siamcat(feat = test.feat, meta = test.meta,
@@ -218,69 +237,7 @@ set.seed(1234)
 
 
 
-siamcat.fecal.train.obj <- list()
-siamcat.fecal.train.deg <- list()
-siamcat.fecal.test.deg <- list()
 
-set.seed(1234)
-for (d in names){
-  all.meta.data <- subset( f.meta.data, Transfer %in% compare.groups[[d]])
-  for(num in 1:10){
-    i <- paste0(d,"_",num)
-    
-    training.samples <- all.meta.data$Transfer %>%  createDataPartition(p = 0.9, list = FALSE)
-    meta.data <- all.meta.data[training.samples,]
-    feat.data <- f.feat.data[, rownames(meta.data)] %>% as.data.frame()
-    
-    siamcat.fecal.train.obj[[i]] <- siamcat.deg(x=feat.data, y=meta.data)
-    temp <- associations(siamcat.fecal.train.obj[[i]]) %>% subset(p.adj <0.1)
-    genus <- rownames(temp)
-    deg.feat <- subset(feat.data, rownames(feat.data) %in% genus)
-    siamcat.fecal.train.deg[[i]] <- siamcat.cross(x=deg.feat, y=meta.data)
-    
-    
-    
-    test.meta <-  all.meta.data[-training.samples,]
-    test.feat <- f.feat.data[, rownames(test.meta)] %>% as.data.frame()
-    
-    
-    test.deg.feat <- subset(test.feat, rownames(test.feat) %in% genus)
-    siamcat.fecal.test.deg[[i]] <- siamcat(feat = test.deg.feat, meta = test.meta,
-                                           label='Transfer', case=compare.groups[[d]][2])
-    siamcat.fecal.test.deg[[i]] <-  make.predictions(siamcat.fecal.train.deg[[i]], siamcat.fecal.test.deg[[i]]) 
-    siamcat.fecal.test.deg[[i]] <-  evaluate.predictions(siamcat.fecal.test.deg[[i]])
-  }
-}
-
-
-
-
-
-siamcat.deg <- function(x,y) {
-  siamcat(feat = x, meta = y,
-          label='Transfer', case=compare.groups[[d]][2]   # change The compare groups;
-  ) %>% 
-    filter.features( filter.method = 'abundance',
-                     cutoff = 0.001,
-                     rm.unmapped = TRUE,
-                     verbose=2
-    ) %>%  
-    normalize.features(norm.method = "log.std",
-                       norm.param = list(log.n0 = 1e-05, sd.min.q = 0.1),
-                       verbose = 2
-    ) %>%
-    check.associations(
-      sort.by = 'fc',
-      alpha = 0.1,
-      mult.corr = "fdr",
-      detect.lim = 10 ^-6,
-      plot.type = "box",
-      panels = c("fc", "prevalence", "auroc"),
-      max.show = 20,
-      feature.type = "normalized",#pr.cutoff=0.05, 
-      fn.plot = paste0("pic/Sputum_",d,".pdf")
-    )
-}
 ##
 
 
