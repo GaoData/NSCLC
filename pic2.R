@@ -234,32 +234,8 @@ for (d in names){
     }
 }
 
-
-
-
-
 ##
-
-
-
-
-
-
-
-
-
-
-pred <- c()
-labels <- c()
-for(y in 21:30)
-{
-  #auc(label(siamcat.sputum.train[[1]])$label, pred_matrix(siamcat.sputum.train[[1]])[,1])
-  test <- pred_matrix(siamcat.sputum.test[[y]]) %>% apply(1,mean) %>% as.data.frame()
-  label <- label(siamcat.sputum.test[[y]])$label %>% as.data.frame()
-  pred <- rbind(pred,test)
-  labels <- rbind(labels,label)
-}
-auc(labels$., pred$.)
+# mean of AUC
 
 library(pROC)
 roc.result <- c()
@@ -268,47 +244,8 @@ for(y in 1:10)
   roc.result <- rbind(roc.result,auc(eval_data(siamcat.test[[y]])$roc))
 }
 mean(roc.result)
-
-feature_mean <- foreach(y = 31:40, .combine = rbind) %do% { 
-                feature_weights(siamcat.rfe.sputum.train[[y]]) %>% rownames_to_column(var = "Genus")
-                }  %>% dplyr::select(Genus, mean.weight) %>% group_by(Genus) %>%
-                mutate(num=n(), weight_mean = mean(mean.weight)) %>% 
-                mutate (robustness = (num/10)*100) %>%
-                arrange(robustness,weight_mean) 
-feature.plot <- feature_mean %>% subset(Genus %in% tail(unique(feature_mean$Genus),n=20L) ) #%>% gather (key="var", value = "value", -Genus,-num)
-
-
-feature_mean <- foreach(y = 1:10, .combine = rbind) %do% { 
-    feature_weights(siamcat.fecal.train[[y]]) %>% rownames_to_column(var = "Genus") %>%
-    mutate(r.mea=rank(-abs(mean.weight))) %>% arrange(r.mea) %>% 
-    mutate(r.mea.top=case_when(r.mea > 20~0, TRUE~1))
-    }  %>% dplyr::select(Genus, mean.weight, r.mea.top) %>% group_by(Genus) %>%
-    mutate(num=sum(r.mea.top), weight_mean = mean(mean.weight)) %>% 
-    mutate (robustness = (num/10)*100) %>%
-    arrange(robustness,weight_mean) 
-feature.plot <- feature_mean %>% subset(Genus %in% tail(unique(feature_mean$Genus),n=20L) ) #%>% gather (key="var", value = "value", -Genus,-num)
-
-pdf(file = "feature_sputum_CONvsNSCLC.pdf", width = 8, height = 7);
-p <- ggplot( data = feature.plot, aes( x= Genus, y= mean.weight) )+
-      geom_boxplot(aes(fill = robustness))+
-      coord_flip()+
-      scale_x_discrete(limits=unique(feature.plot$Genus))+
-      #guides(fill=guide_legend(reverse=TRUE))+ #注销颜色就变为连续变量；
-      labs( title = "Importance Score",  y = "Mean decrease in accuracy", x=NULL, fill="robustness(%)")
-genus.plot <- p + theme_set(theme_bw()) + theme(panel.grid.major=element_line(colour=NA)) +
-      theme(axis.text.x=element_text(size=12),axis.text.y=element_text(size=12))+ 
-      theme(axis.title.x=element_text(size=14,face="bold"), 
-            axis.title.y=element_text(size=14,face="bold"),
-            title=element_text(size=14,face="bold"))+
-      theme(legend.position="right") +
-      scale_fill_gradient(low="#E0FFFF", high="#00CED1")
-print (genus.plot)
-dev.off();
-
-
-
-
-
+##########
+# plot of feature importance and heatmap
 feature_mean <- foreach(y = 1:10, .combine = rbind) %do% { 
   feature_weights(siamcat.train[[y]]) %>% rownames_to_column(var = "Genus") %>%
     mutate(r.mea=rank(-abs(mean.weight))) %>% arrange(r.mea) %>% 
@@ -326,8 +263,6 @@ p <- ggplot( data = feature.plot, aes( x= Genus, y= mean.weight) )+
   coord_flip()+
   scale_x_discrete(limits=unique(feature.plot$Genus))+
   geom_text(data = feature.plot, aes( x= Genus, y= max(mean.weight)+0.01,label=paste0(robustness,"%"))) +
-  
-  #guides(fill=guide_legend(reverse=TRUE))+ #注销颜色就变为连续变量；
   labs( title = "Importance Score",  y = "Mean weights in accuracy", x=NULL, fill="Source")
 genus.plot <- p + theme_set(theme_classic()) + theme(panel.grid.major=element_line(colour=NA)) +
   theme(axis.text.x=element_text(size=12),axis.text.y=element_text(size=12))+ 
@@ -340,8 +275,6 @@ print (genus.plot)
 
 
 genus.select <- rev(unique(feature.plot$Genus))
-#all.dat <- rbind(s.dat,f.dat)
-
 pheno.chose <- pheno %>% subset(Transfer %in% c("I_III","IV")) %>% arrange(Transfer)
 genus.abun <- all.dat[genus.select, rownames(pheno.chose)] #%>% t() %>% cbind(pheno.chose) %>% gather(key="Genus", value="abundance", -Disease, -Transfer) 
 
@@ -350,7 +283,7 @@ anno_col = data.frame(Status = c(rep("I_III",27),rep("IV",38)))
 rownames(anno_col) <- colnames(genus.abun)
 
 ann_colors = list(
-  Status = c( I_III = "#6CC24A", IV= "#007A53") # c('#007A53', '#009F4D', "#6CC24A", 'white', "#EFC06E", "#FFA300", '#BE5400') #CFCFCF
+  Status = c( I_III = "#6CC24A", IV= "#007A53") 
 );
 
 heat.map <- pheatmap(genus.abun,scale = "row",cluster_row = F, cluster_col = F, border=NA, show_colnames = T,
@@ -359,52 +292,14 @@ heat.map <- pheatmap(genus.abun,scale = "row",cluster_row = F, cluster_col = F, 
                      annotation_col = anno_col, annotation_colors = ann_colors, 
                      main="Heatmap") %>% as.ggplot()
 print(heat.map)
-
 pdf(file = "all/feature_Mix_IIIvsDM.pdf", width = 15, height = 7);
 plot_grid(genus.plot,heat.map)
 dev.off();
-
-
 
 require(ggplotify)
 
 
 
-
-
-
-all.meta.data <- subset( pheno, Disease %in% compare.groups[[d]])
-f.feat.all <- f.dat[, rownames(all.meta.data)] %>% as.data.frame()
-s.feat.all <- s.dat[, rownames(all.meta.data)] %>% as.data.frame()
-feat.all <- rbind(s.feat.all,f.feat.all)
-feat.x <- t(feat.all) %>% as.data.frame() 
-feat.x <- scale(feat.x[,-nearZeroVar(feat.x)])
-feat.x <- feat.x[,-findCorrelation(cor(feat.x), .8)] %>% as.data.frame()
-for(num in 1:10){
-  i <- paste0(d,"_",num)
-  
-  training.samples <- all.meta.data$Disease %>%  createDataPartition(p = 0.9, list = FALSE)
-  meta.data <- all.meta.data[training.samples,]
-  feat.data <- feat.all[,rownames(meta.data)]
-  
-  siamcat.train[[i]] <- siamcat.cross(x=feat.data, y=meta.data)
-  test.meta <-  all.meta.data[-training.samples,]
-  test.feat <- feat.all[, rownames(test.meta)] %>% as.data.frame()
-  
-  siamcat.test[[i]] <- siamcat(feat = test.feat, meta = test.meta,
-                               label='Disease', case=compare.groups[[d]][2]
-  )
-  siamcat.test[[i]] <-  make.predictions(siamcat.train[[i]], siamcat.test[[i]]) 
-  siamcat.test[[i]] <-  evaluate.predictions(siamcat.test[[i]])
-  
-  feat.x.data <- feat.x[training.samples,]
-  caret.list[[i]] <- rfe(feat.x.data, as.factor(meta.data$Disease), sizes = c(2:50), 
-                         rfeControl = rfeControl(functions=rfFuncs, method="cv", number=10, repeats = 10, allowParallel = TRUE))
-  
-  genus <- caret.list[[i]]$optVariables
-  rfe.feat <- subset(feat.all, rownames(feat.all) %in% genus)
-  train.feat <- rfe.feat[,rownames(meta.data)]
-  siamcat.rfe.train[[i]] <- siamcat.cross(x=train.feat, y=meta.data)
   
   #test.meta <-  all.meta.data[-training.samples,]
   test.feat <-  rfe.feat[,rownames(test.meta)]
