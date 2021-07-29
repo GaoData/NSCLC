@@ -296,17 +296,3 @@ pdf(file = "all/feature_Mix_IIIvsDM.pdf", width = 15, height = 7);
 plot_grid(genus.plot,heat.map)
 dev.off();
 
-require(ggplotify)
-
-
-
-  
-  #test.meta <-  all.meta.data[-training.samples,]
-  test.feat <-  rfe.feat[,rownames(test.meta)]
-  
-  siamcat.rfe.test[[i]] <- siamcat(feat = test.feat, meta = test.meta,
-                                   label='Disease', case=compare.groups[[d]][2]
-  )
-  siamcat.rfe.test[[i]] <-  make.predictions(siamcat.rfe.train[[i]], siamcat.rfe.test[[i]]) 
-  siamcat.rfe.test[[i]] <-  evaluate.predictions(siamcat.rfe.test[[i]])
-}
